@@ -318,18 +318,64 @@ class Layer_Dropout:
     # Gradient on values
         self.dinputs = dvalues * self.binary_mask
 
+# Sigmoid activation
+class Activation_Sigmoid:
+    # Forward pass
+    def forward(self, inputs):
+        # Save input and calculate/save output
+        # of the sigmoid function
+        self.inputs = inputs
+        self.output = 1 / (1 + np.exp(-inputs))
+
+    # Backward pass
+    def backward(self, dvalues):
+        # Derivative - calculates from output of the sigmoid function
+        self.dinputs = dvalues * (1 - self.output) * self.output
+
+class Loss_BinaryCrossentropy(Loss):
+    # Forward pass
+    def forward(self, y_pred, y_true):
+        # Clip data to prevent division by 0
+        # Clip both sides to not drag mean towards any value
+        y_pred_clipped = np.clip(y_pred, 1e-7, 1 - 1e-7)
+        # Calculate sample-wise loss
+        sample_losses = -(y_true * np.log(y_pred_clipped) +
+        (1 - y_true) * np.log(1 - y_pred_clipped))
+        sample_losses = np.mean(sample_losses, axis=-1)
+        # Return losses
+        return sample_losses
+    
+    # Backward pass
+    def backward(self, dvalues, y_true):
+        # Number of samples
+        samples = len(dvalues)
+        # Number of outputs in every sample
+        # We'll use the first sample to count them
+        outputs = len(dvalues[0])
+        # Clip data to prevent division by 0
+        # Clip both sides to not drag mean towards any value
+        clipped_dvalues = np.clip(dvalues, 1e-7, 1 - 1e-7)
+        # Calculate gradient
+        self.dinputs = -(y_true / clipped_dvalues -
+        (1 - y_true) / (1 - clipped_dvalues)) / outputs
+        # Normalize gradient
+        self.dinputs = self.dinputs / samples
+
+
 # Create dataset
-X, y = spiral_data(samples=100, classes=3)
+X, y = spiral_data(samples=100, classes=2)
+
+y = y.reshape(-1, 1)
 # Create Dense layer with 2 input features and 3 output values
 dense1 = Layer_Dense(2, 64, weight_regularizer_l2=5e-4,
                      bias_regularizer_l2=5e-4)
 # Create ReLU activation (to be used with Dense layer):
 activation1 = Activation_ReLU()
 # Dropout layer
-dropout1 = Layer_Dropout(0.1)
+# dropout1 = Layer_Dropout(0.1) //TODO: Tu skończyłem
 # Create second Dense layer with 3 input features (as we take output
 # of previous layer here) and 3 output values (output values)
-dense2 = Layer_Dense(64, 3)
+dense2 = Layer_Dense(64, 1)
 # Create Softmax classifier's combined loss and activation
 loss_activation = Activation_Softmax_Loss_CategoricalCrossentropy()
 # Perform a forward pass of our training data through this layer
