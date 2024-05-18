@@ -49,74 +49,89 @@ class Layer_Dense:
 
 
 class Activation_ReLU:
-    def forward(self, inputs):
-        self.inputs = inputs
-        self.output = np.maximum(0, inputs)
+   def forward(self, inputs):
+      self.inputs = inputs
+      self.output = np.maximum(0, inputs)
 
-    def backward(self, dvalues):
-        # Since we need to modify the original variable,
-        # let's make a copy of the values first
-        self.dinputs = dvalues.copy()
-        # Zero gradient where input values were negative
-        self.dinputs[self.inputs <= 0] = 0
+   def backward(self, dvalues):
+      # Since we need to modify the original variable,
+      # let's make a copy of the values first
+      self.dinputs = dvalues.copy()
+      # Zero gradient where input values were negative
+      self.dinputs[self.inputs <= 0] = 0
+
+   # Calculate predictions for outputs
+   def predictions(self, outputs):
+      return outputs
+
 
 class Activation_Softmax:
-    def forward(self, inputs):
-        self.inputs = inputs
-        exp_values = np.exp(inputs - np.max(inputs, axis=1, keepdims=True))
-        probabilities = exp_values / np.sum(exp_values, axis=1, keepdims=True)
-        self.output = probabilities
+   def forward(self, inputs):
+      self.inputs = inputs
+      exp_values = np.exp(inputs - np.max(inputs, axis=1, keepdims=True))
+      probabilities = exp_values / np.sum(exp_values, axis=1, keepdims=True)
+      self.output = probabilities
     
     # Backward pass
-    def backward(self, dvalues):
-        # Create uninitialized array
-        self.dinputs = np.empty_like(dvalues)
-        # Enumerate outputs and gradients
-        for index, (single_output, single_dvalues) in \
-                enumerate(zip(self.output, dvalues)):
-            # Flatten output array
-            single_output = single_output.reshape(-1, 1)
-            # Calculate Jacobian matrix of the output and
-            jacobian_matrix = np.diagflat(single_output) - \
-                                            np.dot(single_output, single_output.T)
-            # Calculate sample-wise gradient
-            # and add it to the array of sample gradients
-            self.dinputs[index] = np.dot(jacobian_matrix,
-                                            single_dvalues)
+   def backward(self, dvalues):
+      # Create uninitialized array
+      self.dinputs = np.empty_like(dvalues)
+      # Enumerate outputs and gradients
+      for index, (single_output, single_dvalues) in \
+               enumerate(zip(self.output, dvalues)):
+         # Flatten output array
+         single_output = single_output.reshape(-1, 1)
+         # Calculate Jacobian matrix of the output and
+         jacobian_matrix = np.diagflat(single_output) - \
+                                          np.dot(single_output, single_output.T)
+         # Calculate sample-wise gradient
+         # and add it to the array of sample gradients
+         self.dinputs[index] = np.dot(jacobian_matrix,
+                                          single_dvalues)
+            
+   # Calculate predictions for outputs
+   def predictions(self, outputs):
+      return np.argmax(outputs, axis=1)
 
 
 class Loss:
+   # Set/remember trainable layers
+   def remember_trainable_layers(self, trainable_layers):
+      self.trainable_layers = trainable_layers
+
    # Regularization loss calculation
    def regularization_loss(self, layer):
       # 0 by default
       regularization_loss = 0
-      # L1 regularization - weights
-      # calculate only when factor greater than 0
-      if layer.weight_regularizer_l1 > 0:
-         regularization_loss += layer.weight_regularizer_l1 * \
-                                 np.sum(np.abs(layer.weights))
-      # L2 regularization - weights
-      if layer.weight_regularizer_l2 > 0:
-         regularization_loss += layer.weight_regularizer_l2 * \
-                                 np.sum(layer.weights * \
-                                 layer.weights)
 
-      # L1 regularization - biases
-      # calculate only when factor greater than 0
-      if layer.bias_regularizer_l1 > 0:
-         regularization_loss += layer.bias_regularizer_l1 * \
-                                 np.sum(np.abs(layer.biases))
-      # L2 regularization - biases
-      if layer.bias_regularizer_l2 > 0:
-         regularization_loss += layer.bias_regularizer_l2 * \
-                                 np.sum(layer.biases * \
-                                 layer.biases)
+      for layer in self.trainable_layers:
+         # L1 regularization - weights
+         # calculate only when factor greater than 0
+         if layer.weight_regularizer_l1 > 0:
+            regularization_loss += layer.weight_regularizer_l1 * \
+                                    np.sum(np.abs(layer.weights))
+         # L2 regularization - weights
+         if layer.weight_regularizer_l2 > 0:
+            regularization_loss += layer.weight_regularizer_l2 * \
+                                    np.sum(layer.weights * \
+                                    layer.weights)
+
+         # L1 regularization - biases
+         # calculate only when factor greater than 0
+         if layer.bias_regularizer_l1 > 0:
+            regularization_loss += layer.bias_regularizer_l1 * \
+                                    np.sum(np.abs(layer.biases))
+         # L2 regularization - biases
+         if layer.bias_regularizer_l2 > 0:
+            regularization_loss += layer.bias_regularizer_l2 * \
+                                    np.sum(layer.biases * \
+                                    layer.biases)
       return regularization_loss
 
    def calculate(self, output, y):
       sample_losses = self.forward(output, y)
       data_loss = np.mean(sample_losses)
-      return data_loss
+      return data_loss, self.regularization_loss()
     
 class Loss_CategoricalCrossentropy(Loss):
     def forward(self, y_pred, y_true):
@@ -320,17 +335,22 @@ class Layer_Dropout:
 
 # Sigmoid activation
 class Activation_Sigmoid:
-    # Forward pass
-    def forward(self, inputs):
-        # Save input and calculate/save output
-        # of the sigmoid function
-        self.inputs = inputs
-        self.output = 1 / (1 + np.exp(-inputs))
+   # Forward pass
+   def forward(self, inputs):
+      # Save input and calculate/save output
+      # of the sigmoid function
+      self.inputs = inputs
+      self.output = 1 / (1 + np.exp(-inputs))
 
-    # Backward pass
-    def backward(self, dvalues):
-        # Derivative - calculates from output of the sigmoid function
-        self.dinputs = dvalues * (1 - self.output) * self.output
+   # Backward pass
+   def backward(self, dvalues):
+      # Derivative - calculates from output of the sigmoid function
+      self.dinputs = dvalues * (1 - self.output) * self.output
+
+   # Calculate predictions for outputs
+   def predictions(self, outputs):
+      return (outputs > 0.5) * 1
+
 
 class Loss_BinaryCrossentropy(Loss):
     # Forward pass
@@ -363,15 +383,19 @@ class Loss_BinaryCrossentropy(Loss):
 
 # Linear activation
 class Activation_Linear:
-    # Forward pass
-    def forward(self, inputs):
-        # Just remember values
-        self.inputs = inputs
-        self.output = inputs
-    # Backward pass
-    def backward(self, dvalues):
-        # derivative is 1, 1 * dvalues = dvalues - the chain rule
-        self.dinputs = dvalues.copy()
+   # Forward pass
+   def forward(self, inputs):
+      # Just remember values
+      self.inputs = inputs
+      self.output = inputs
+   # Backward pass
+   def backward(self, dvalues):
+      # derivative is 1, 1 * dvalues = dvalues - the chain rule
+      self.dinputs = dvalues.copy()
+
+   # Calculate predictions for outputs
+   def predictions(self, outputs):
+      return outputs
         
 # Mean Squared Error loss
 class Loss_MeanSquaredError(Loss): # L2 loss
@@ -412,116 +436,8 @@ class Loss_MeanAbsoluteError(Loss): # L1 loss
         # Normalize gradient
         self.dinputs = self.dinputs / samples
 
-
-# Create dataset
-X, y = sine_data()
-# Create Dense layer with 2 input features and 3 output values
-dense1 = Layer_Dense(1, 64)
-# Create ReLU activation (to be used with Dense layer):
-activation1 = Activation_ReLU()
-# Dropout layer
-# dropout1 = Layer_Dropout(0.1)
-# Create second Dense layer with 3 input features (as we take output
-# of previous layer here) and 3 output values (output values)
-dense2 = Layer_Dense(64, 64)
-# Create Softmax classifier's combined loss and activation
-activation2 = Activation_ReLU()
-dense3 = Layer_Dense(64, 1)
-activation3 = Activation_Linear()
-# Perform a forward pass of our training data through this layer
-loss_function = Loss_MeanSquaredError()
-optimizer = Optimizer_Adam(learning_rate=0.005, decay=1e-3)
-accuracy_precision = np.std(y) / 250
-
-for epoch in range(10001):
-   dense1.forward(X)
-   # Perform a forward pass through activation function
-   # takes the output of first dense layer here
-   activation1.forward(dense1.output)
-   # Perform a forward pass through Dropout layer
-   dense2.forward(activation1.output)
-   # Perform a forward pass through second Dense layer
-   # takes outputs of activation function of first layer as inputs
-   activation2.forward(dense2.output)
-   dense3.forward(activation2.output)
-   activation3.forward(dense3.output)   
-   # Perform a forward pass through the activation/loss function
-   # takes the output of second dense layer here and returns loss
-   data_loss = loss_function.calculate(activation3.output, y)
-   # Calculate regularization penalty
-   regularization_loss = \
-        loss_function.regularization_loss(dense1) + \
-        loss_function.regularization_loss(dense2) + \
-        loss_function.regularization_loss(dense3)
-   # Calculate overall loss
-   loss = data_loss + regularization_loss
-   # Calculate accuracy from output of activation2 and targets
-   # calculate values along first axis
-   predictions = activation3.output
-   accuracy =  np.mean(np.absolute(predictions - y) <
-                accuracy_precision)
-
-   if not epoch % 100:
-      print(f'epoch: {epoch}, ' +
-            f'acc: {accuracy:.3f}, ' +
-            f'loss: {loss:.3f}, ' +
-            f'data_loss: {data_loss:.3f}, ' +
-            f'reg_loss: {regularization_loss:.3f}), ' +
-            f'lr: {optimizer.current_learning_rate}')
-
-    # Backward pass
-   loss_function.backward(activation3.output, y)
-   activation3.backward(loss_function.dinputs)
-   dense3.backward(activation3.dinputs)
-   activation2.backward(dense3.dinputs)
-   dense2.backward(activation2.dinputs)
-   activation1.backward(dense2.dinputs)
-   dense1.backward(activation1.dinputs)
-
-   # Update weights and biases
-   optimizer.pre_update_params()
-   optimizer.update_params(dense1)
-   optimizer.update_params(dense2)
-   optimizer.update_params(dense3)
-   optimizer.post_update_params()
-
-import matplotlib.pyplot as plt
-
-X_test, y_test = sine_data()
-
-dense1.forward(X_test)
-activation1.forward(dense1.output)
-dense2.forward(activation1.output)
-activation2.forward(dense2.output)
-dense3.forward(activation2.output)
-activation3.forward(dense3.output)
-
-plt.plot(X_test, y_test)
-plt.plot(X_test, activation3.output)
-plt.show()
-
-
-
-
-# # Validate the model
-# # Create test dataset
-# X_test, y_test = spiral_data(samples=100, classes=2)
-# # Perform a forward pass of our testing data through this layer
-# y_test = y_test.reshape(-1, 1)
-# dense1.forward(X_test)
-# # Perform a forward pass through activation function
-# # takes the output of first dense layer here
-# activation1.forward(dense1.output)
-# # Perform a forward pass through second Dense layer
-# # takes outputs of activation function of first layer as inputs
-# dense2.forward(activation1.output)
-# # Perform a forward pass through the activation/loss function
-# # takes the output of second dense layer here and returns loss
-# activation2.forward(dense2.output)
-# loss = loss_function.calculate(activation2.output, y_test)
-# # Calculate accuracy from output of activation2 and targets
-# # calculate values along first axis
-# predictions = (activation2.output > 0.5) * 1
-# accuracy = np.mean(predictions==y)  
-
-# print(f'validation, acc: {accuracy:.3f}, loss: {loss:.3f}')
+# Input "layer"
+class Layer_Input:
+   # Forward pass
+   def forward(self, inputs):
+      self.output = inputs
