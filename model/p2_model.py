@@ -304,11 +304,12 @@ paths = [
    "fashion_mnist_images/test/9/0100.png"
 ]
 
-image_data = cv2.imread(paths[1], cv2.IMREAD_GRAYSCALE)
+image_data = cv2.imread("predictions/sneakers.png", cv2.IMREAD_GRAYSCALE)
 image_data = cv2.resize(image_data, (28, 28))
+image_data = 255 - image_data #this line is needed only for predictions folder
 image_data = (image_data.reshape(1, -1).astype(np.float32) - 127.5) / 127.5
 
-model = Model.load('fashion_mnist.model')
+model = Model.load('fashion_mnist1.model')
 confidences = model.predict(image_data)
 predictions = model.output_layer_activation.predictions(confidences)
 prediction = fashion_mnist_labels[predictions[0]]
