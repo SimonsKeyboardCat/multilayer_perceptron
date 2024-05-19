@@ -46,4 +46,4 @@ def create_data_mnist(path):
 
 # print(X.min(), X.max())
 # print(X.shape)
-#End of test functions
+# End of test functions
